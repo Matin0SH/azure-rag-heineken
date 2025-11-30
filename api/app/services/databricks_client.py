@@ -6,6 +6,26 @@ from typing import Dict, Any, Optional
 import uuid
 
 from app.config.settings import settings
+import hashlib
+
+def sanitize_filename(filename: str) -> str:
+    """
+    Sanitize filename to prevent URL issues
+    - Removes special characters
+    - Limits length to 50 chars
+    - Preserves extension
+    """
+    name, ext = filename.rsplit(".", 1) if "." in filename else (filename, "pdf")
+
+    # Remove special characters, keep alphanumeric, hyphens, underscores
+    safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in name)
+
+    # Limit length and add hash for uniqueness
+    if len(safe_name) > 40:
+        hash_suffix = hashlib.md5(filename.encode()).hexdigest()[:6]
+        safe_name = f"{safe_name[:40]}_{hash_suffix}"
+
+    return f"{safe_name}.{ext}"
 
 class DatabricksClient:
     """Client for interacting with Databricks REST API"""
@@ -153,6 +173,124 @@ class DatabricksClient:
         response.raise_for_status()
 
         return response.json()
+
+    def check_pdf_exists(self, pdf_name: str) -> bool:
+        """
+        Check if PDF with given name already exists by checking BOTH registry and volume
+
+        Args:
+            pdf_name: PDF filename to check (this IS the identifier now)
+
+        Returns:
+            True if exists, False otherwise
+        """
+        from databricks.sdk import WorkspaceClient
+        from databricks.sdk.service.sql import StatementState
+
+        w = WorkspaceClient(
+            host=settings.DATABRICKS_HOST,
+            token=settings.DATABRICKS_TOKEN
+        )
+
+        # Strategy 1: Check registry table (most reliable if job completed)
+        if settings.SQL_WAREHOUSE_ID:
+            query = f"""
+            SELECT pdf_id
+            FROM {settings.CATALOG_NAME}.{settings.SCHEMA_NAME}.{settings.TABLE_REGISTRY}
+            WHERE pdf_name = '{pdf_name}'
+            LIMIT 1
+            """
+
+            try:
+                statement = w.statement_execution.execute_statement(
+                    warehouse_id=settings.SQL_WAREHOUSE_ID,
+                    statement=query,
+                    wait_timeout="30s"
+                )
+
+                if statement.status.state == StatementState.SUCCEEDED and statement.result and statement.result.data_array:
+                    print(f"Found existing PDF in registry: {pdf_name}")
+                    return True
+
+            except Exception as e:
+                print(f"Error checking registry: {e}")
+
+        # Strategy 2: Check if file exists in volume (backup check)
+        try:
+            volume_path = f"/Volumes/{settings.CATALOG_NAME}/{settings.SCHEMA_NAME}/{settings.VOLUME_RAW_PDFS}/{pdf_name}"
+            file_info = w.files.get_status(volume_path)
+            if file_info:
+                print(f"Found existing PDF in volume: {pdf_name}")
+                return True
+        except Exception as e:
+            # File doesn't exist - this is good
+            pass
+
+        return False
+
+    def cleanup_existing_pdf(self, pdf_name: str) -> None:
+        """
+        Delete all data related to an existing PDF
+
+        Args:
+            pdf_name: PDF filename (this IS the identifier - no separate pdf_id anymore)
+        """
+        from databricks.sdk import WorkspaceClient
+
+        w = WorkspaceClient(
+            host=settings.DATABRICKS_HOST,
+            token=settings.DATABRICKS_TOKEN
+        )
+
+        print(f"Cleaning up all data for PDF: {pdf_name}")
+
+        # Execute cleanup queries - pdf_id = pdf_name now
+        cleanup_queries = [
+            # Delete chunks and embeddings
+            f"DELETE FROM {settings.CATALOG_NAME}.{settings.SCHEMA_NAME}.{settings.TABLE_CHUNKS} WHERE pdf_id = '{pdf_name}'",
+
+            # Delete page screenshots metadata
+            f"DELETE FROM {settings.CATALOG_NAME}.{settings.SCHEMA_NAME}.{settings.TABLE_SCREENSHOTS} WHERE pdf_id = '{pdf_name}'",
+
+            # Delete operator questions
+            f"DELETE FROM {settings.CATALOG_NAME}.{settings.SCHEMA_NAME}.operator_questions WHERE pdf_id = '{pdf_name}'",
+
+            # Delete document summaries
+            f"DELETE FROM {settings.CATALOG_NAME}.{settings.SCHEMA_NAME}.document_summaries WHERE pdf_id = '{pdf_name}'",
+
+            # Delete registry entry
+            f"DELETE FROM {settings.CATALOG_NAME}.{settings.SCHEMA_NAME}.{settings.TABLE_REGISTRY} WHERE pdf_id = '{pdf_name}'"
+        ]
+
+        # Only attempt SQL cleanup if warehouse is configured
+        if settings.SQL_WAREHOUSE_ID:
+            for query in cleanup_queries:
+                try:
+                    w.statement_execution.execute_statement(
+                        warehouse_id=settings.SQL_WAREHOUSE_ID,
+                        statement=query,
+                        wait_timeout="50s"
+                    )
+                except Exception as e:
+                    print(f"Warning: Error during cleanup - {e}")
+        else:
+            print("Warning: SQL_WAREHOUSE_ID not set; skipping table cleanup")
+
+        # Delete old PDF file from volume
+        try:
+            old_pdf_path = f"/Volumes/{settings.CATALOG_NAME}/{settings.SCHEMA_NAME}/{settings.VOLUME_RAW_PDFS}/{pdf_name}"
+            w.files.delete(old_pdf_path)
+            print(f"Deleted volume file: {pdf_name}")
+        except Exception as e:
+            print(f"Warning: Could not delete old PDF file - {e}")
+
+        # Delete screenshot folder - using pdf_name as folder name now
+        try:
+            screenshot_dir = f"/Volumes/{settings.CATALOG_NAME}/{settings.SCHEMA_NAME}/{settings.VOLUME_SCREENSHOTS}/{pdf_name}/"
+            w.files.delete(screenshot_dir)
+            print(f"Deleted screenshot directory: {pdf_name}/")
+        except Exception as e:
+            print(f"Warning: Could not delete screenshot directory - {e}")
 
 
 # Singleton instance

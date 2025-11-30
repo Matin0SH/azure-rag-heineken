@@ -24,9 +24,30 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+*.so
+*.egg
+*.egg-info/
+.Python
 venv/
 myenv/
 .venv/
+env/
+ENV/
+build/
+dist/
+*.whl
+
+# ===========================
+# API SECRETS & ENV FILES
+# ===========================
+# CRITICAL: Never commit these!
+.env
+.env.local
+.env.*.local
+api/.env
+*.pem
+*.key
+secrets.json
 
 # ===========================
 # DATABRICKS SPECIFIC
@@ -39,16 +60,31 @@ myenv/
 # ===========================
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
 
 # ===========================
 # TESTING
 # ===========================
-test_*.py
-*_test.py
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+*.cover
 
 # ===========================
-# TEMP FILES
+# TEMP FILES & LOGS
 # ===========================
 *.log
 *.tmp
 nul
+logs/
+
+# ===========================
+# PDF TEST FILES (optional - remove if you want to commit test PDFs)
+# ===========================
+*.pdf
+!docs/*.pdf

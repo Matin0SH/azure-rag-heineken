@@ -25,6 +25,10 @@ module "databricks_foundation" {
   catalog_name = var.catalog_name
   schema_name  = var.schema_name
   environment  = var.environment
+
+  providers = {
+    databricks = databricks
+  }
 }
 
 # Core tables
@@ -32,6 +36,10 @@ module "databricks_tables" {
   source       = "./modules/databricks_tables"
   catalog_name = var.catalog_name
   schema_name  = var.schema_name
+
+  providers = {
+    databricks = databricks
+  }
 
   depends_on = [module.databricks_foundation]
 }
@@ -44,6 +52,10 @@ module "databricks_vector" {
   index_name                   = var.vector_index_name
   vector_search_endpoint_name  = var.vector_search_endpoint
   source_table_name            = "${var.catalog_name}.${var.schema_name}.chunks_embedded"
+
+  providers = {
+    databricks = databricks
+  }
 
   depends_on = [module.databricks_tables]
 }
@@ -65,6 +77,10 @@ module "databricks_jobs" {
   embedding_model         = var.embedding_model
   vector_search_endpoint  = var.vector_search_endpoint
   vector_index_name       = var.vector_index_name
+
+  providers = {
+    databricks = databricks
+  }
 
   depends_on = [module.databricks_tables]
 }

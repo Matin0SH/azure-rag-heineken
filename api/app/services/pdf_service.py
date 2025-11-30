@@ -5,7 +5,7 @@ import uuid
 from typing import Dict, Any, Optional
 from fastapi import UploadFile, HTTPException
 
-from app.services.databricks_client import databricks_client
+from app.services.databricks_client import databricks_client, sanitize_filename
 from app.config.settings import settings
 
 class PDFService:
@@ -50,9 +50,25 @@ class PDFService:
         # Validate file
         PDFService.validate_pdf(file)
 
-        # Generate unique PDF ID
-        pdf_id = str(uuid.uuid4())
-        pdf_name = file.filename
+        # Use sanitized name consistently for lookup/upload/job
+        original_name = file.filename
+        pdf_name = sanitize_filename(original_name)
+
+        # pdf_name IS the identifier - no unique ID needed
+        pdf_id = pdf_name
+
+        # Check if PDF with same name already exists
+        existing = databricks_client.check_pdf_exists(pdf_name)
+
+        if existing:
+            # Cleanup existing PDF data
+            print(f"PDF '{pdf_name}' already exists. Cleaning up old data...")
+            try:
+                databricks_client.cleanup_existing_pdf(pdf_name)
+                print(f"Successfully cleaned up old data for '{pdf_name}'")
+            except Exception as e:
+                print(f"Warning during cleanup: {e}")
+                # Continue anyway - we'll create new data
 
         # Read file content
         file_content = await file.read()
@@ -65,35 +81,33 @@ class PDFService:
                 detail=f"File size exceeds maximum allowed size of {settings.MAX_FILE_SIZE_MB}MB"
             )
 
-        # Save file temporarily and upload to Databricks Volume
+        # Upload to Databricks Volume using Files API (same as Streamlit app)
         try:
-            import tempfile
-            import os
-            from databricks.sdk import WorkspaceClient
+            import requests
 
-            # Initialize Databricks SDK client
-            w = WorkspaceClient(
-                host=settings.DATABRICKS_HOST,
-                token=settings.DATABRICKS_TOKEN
+            volume_path = f"/Volumes/{settings.CATALOG_NAME}/{settings.SCHEMA_NAME}/{settings.VOLUME_RAW_PDFS}/{pdf_name}"
+            upload_url = f"{settings.DATABRICKS_HOST}/api/2.0/fs/files{volume_path}"
+
+            headers = {
+                "Authorization": f"Bearer {settings.DATABRICKS_TOKEN}",
+                "Connection": "close"  # Disable keep-alive to prevent SSL issues
+            }
+
+            # PUT request automatically overwrites existing file
+            response = requests.put(
+                upload_url,
+                headers=headers,
+                data=file_content,
+                timeout=300
             )
 
-            # Upload to volume using SDK
-            volume_path = f"/Volumes/{settings.CATALOG_NAME}/{settings.SCHEMA_NAME}/{settings.VOLUME_RAW_PDFS}/{pdf_name}"
+            if response.status_code not in (200, 201, 204):
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Upload failed: {response.status_code} - {response.text}"
+                )
 
-            # Write file using Databricks SDK
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
-                tmp_file.write(file_content)
-                tmp_path = tmp_file.name
-
-            try:
-                # Upload using SDK files API
-                with open(tmp_path, 'rb') as f:
-                    w.files.upload(volume_path, f, overwrite=True)
-            finally:
-                # Clean up temp file
-                os.unlink(tmp_path)
-
-        except Exception as e:
+        except requests.exceptions.RequestException as e:
             raise HTTPException(
                 status_code=500,
                 detail=f"Failed to upload file to Databricks: {str(e)}"
@@ -109,12 +123,18 @@ class PDFService:
                 detail=f"Failed to trigger Databricks job: {str(e)}"
             )
 
+        # Build response message
+        if existing:
+            message = f"PDF '{pdf_name}' re-uploaded. Old data cleaned up, processing started"
+        else:
+            message = f"PDF '{pdf_name}' uploaded and processing started"
+
         return {
-            "pdf_id": pdf_id,
+            "pdf_id": pdf_name,  # pdf_id = pdf_name now
             "pdf_name": pdf_name,
             "job_run_id": job_run_id,
             "status": "processing",
-            "message": f"PDF '{pdf_name}' uploaded and processing started"
+            "message": message
         }
 
     @staticmethod

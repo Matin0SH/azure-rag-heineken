@@ -1,8 +1,6 @@
 resource "databricks_job" "ingest_pipeline" {
   name                  = var.job_name
   max_concurrent_runs   = 1
-  max_retries           = var.max_retries
-  retry_on_timeout      = var.retry_on_timeout
   timeout_seconds       = var.timeout_seconds
   existing_cluster_id   = var.existing_cluster_id != "" ? var.existing_cluster_id : null
 
@@ -17,6 +15,8 @@ resource "databricks_job" "ingest_pipeline" {
 
   task {
     task_key = "ingest_pipeline"
+    max_retries      = var.max_retries
+    retry_on_timeout = var.retry_on_timeout
 
     notebook_task {
       notebook_path = var.notebook_path
