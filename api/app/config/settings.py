@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     SQL_WAREHOUSE_ID: str = ""
 
     # File Upload Configuration
-    MAX_FILE_SIZE_MB: int = 100
+    MAX_FILE_SIZE_MB: int = 1000
     ALLOWED_EXTENSIONS: List[str] = [".pdf"]
 
     class Config:

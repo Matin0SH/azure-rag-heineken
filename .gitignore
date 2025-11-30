@@ -84,7 +84,9 @@ nul
 logs/
 
 # ===========================
-# PDF TEST FILES (optional - remove if you want to commit test PDFs)
+# PDF TEST FILES & GENERATED SUMMARIES
 # ===========================
 *.pdf
 !docs/*.pdf
+summary_*.txt
+*.ipynb_checkpoints/

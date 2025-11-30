@@ -48,7 +48,7 @@ def create_summarization_graph():
     def should_revise(state: SummarizationState) -> str:
         """Decide if revision needed based on critique."""
         if state.get("needs_revision", False):
-            return "combine"  # Re-run combination
+            return "batch_extract"  # Re-run extraction/combination
         else:
             return "extract_topics"  # Proceed to topic extraction
 
@@ -57,7 +57,7 @@ def create_summarization_graph():
         "reflect",
         should_revise,
         {
-            "combine": "combine",  # Revision path
+            "batch_extract": "batch_extract",  # Revision path (fresh extraction)
             "extract_topics": "extract_topics"  # Success path
         }
     )
