@@ -43,7 +43,14 @@ jobs:
           echo "host = $DATABRICKS_HOST" >> ~/.databrickscfg
           echo "token = $DATABRICKS_TOKEN" >> ~/.databrickscfg
 
-      # Step 5: Create or update Databricks Repo
+      # Step 5: Create parent folder if needed
+      - name: Create Repos parent folder
+        run: |
+          echo "Creating /Repos/Production/ folder if needed..."
+          databricks workspace mkdirs /Repos/Production/ || true
+          echo "✅ Parent folder ready"
+
+      # Step 6: Create or update Databricks Repo
       - name: Sync code to Databricks Repos
         run: |
           # Try to update existing repo, create if doesn't exist
