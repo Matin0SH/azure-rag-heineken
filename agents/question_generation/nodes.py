@@ -41,7 +41,7 @@ def extract_and_validate_json(raw_output: str) -> str:
     The LLM sometimes adds extra text before/after the JSON array.
     This function:
     1. Removes common prefixes like <|python_start|>
-    2. Extracts the JSON array using regex
+    2. Tries multiple strategies to extract valid JSON
     3. Validates the JSON is parseable
     4. Returns clean, valid JSON string
 
@@ -71,33 +71,67 @@ def extract_and_validate_json(raw_output: str) -> str:
 
     cleaned = cleaned.strip()
 
-    # Find JSON array boundaries using regex
-    # Look for [ ... ] pattern, handling nested arrays and objects
-    json_match = re.search(r'\[[\s\S]*\]', cleaned, re.DOTALL)
-
-    if not json_match:
-        # No array found, raise error
-        raise ValueError(f"No JSON array found in output. First 200 chars: {cleaned[:200]}")
-
-    json_str = json_match.group(0)
-
-    # Validate JSON is parseable
+    # Strategy 1: Try to parse the whole thing (it might already be clean JSON)
     try:
-        parsed = json.loads(json_str)
+        parsed = json.loads(cleaned)
+        if isinstance(parsed, list) and len(parsed) > 0:
+            return json.dumps(parsed, ensure_ascii=False)
+    except:
+        pass
 
-        # Ensure it's a list
-        if not isinstance(parsed, list):
-            raise ValueError(f"Expected JSON array, got {type(parsed)}")
+    # Strategy 2: Find first [ and try to parse from there
+    start_idx = cleaned.find('[')
+    if start_idx >= 0:
+        # Try parsing from first [
+        try:
+            parsed = json.loads(cleaned[start_idx:])
+            if isinstance(parsed, list) and len(parsed) > 0:
+                return json.dumps(parsed, ensure_ascii=False)
+        except:
+            pass
 
-        # Ensure it has content
-        if len(parsed) == 0:
-            raise ValueError("JSON array is empty")
+        # Strategy 3: Use a smarter approach - find matching bracket
+        # Start from first [, find the matching ]
+        bracket_count = 0
+        in_string = False
+        escape_next = False
+        end_idx = -1
 
-        # Re-serialize to ensure consistent formatting
-        return json.dumps(parsed, ensure_ascii=False)
+        for i in range(start_idx, len(cleaned)):
+            char = cleaned[i]
 
-    except json.JSONDecodeError as e:
-        raise ValueError(f"Invalid JSON: {e}. Content: {json_str[:200]}")
+            if escape_next:
+                escape_next = False
+                continue
+
+            if char == '\\':
+                escape_next = True
+                continue
+
+            if char == '"' and not escape_next:
+                in_string = not in_string
+                continue
+
+            if not in_string:
+                if char == '[':
+                    bracket_count += 1
+                elif char == ']':
+                    bracket_count -= 1
+                    if bracket_count == 0:
+                        end_idx = i + 1
+                        break
+
+        if end_idx > start_idx:
+            json_candidate = cleaned[start_idx:end_idx]
+            try:
+                parsed = json.loads(json_candidate)
+                if isinstance(parsed, list) and len(parsed) > 0:
+                    return json.dumps(parsed, ensure_ascii=False)
+            except:
+                pass
+
+    # If we get here, nothing worked
+    raise ValueError(f"Could not extract valid JSON array. First 500 chars: {cleaned[:500]}")
 
 
 def clean_question_batch(questions_list: List[str]) -> List[str]:
@@ -118,18 +152,20 @@ def clean_question_batch(questions_list: List[str]) -> List[str]:
             cleaned = extract_and_validate_json(raw_output)
             cleaned_questions.append(cleaned)
         except ValueError as e:
-            errors.append(f"Item {i+1}: {str(e)}")
-            # Skip this item
-            continue
+            errors.append(f"Item {i+1}: {str(e)[:100]}")
+            # FALLBACK: Keep the original if cleaning fails
+            # This prevents losing all data if our cleaning is too aggressive
+            print(f"Warning: Item {i+1} cleaning failed, keeping original")
+            cleaned_questions.append(raw_output)
 
     if errors:
-        print(f"Warning: {len(errors)} items failed validation:")
-        for error in errors[:5]:  # Show first 5 errors
+        print(f"Warning: {len(errors)} items had cleaning issues (kept originals):")
+        for error in errors[:3]:  # Show first 3 errors
             print(f"  - {error}")
-        if len(errors) > 5:
-            print(f"  ... and {len(errors) - 5} more")
+        if len(errors) > 3:
+            print(f"  ... and {len(errors) - 3} more")
 
-    print(f"OK: Cleaned {len(cleaned_questions)}/{len(questions_list)} question sets")
+    print(f"OK: Processed {len(cleaned_questions)}/{len(questions_list)} question sets")
 
     return cleaned_questions
 
