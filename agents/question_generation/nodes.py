@@ -18,6 +18,7 @@ Example with 675 pages:
 """
 
 import json
+import re
 from typing import List, Dict
 from pyspark.sql import SparkSession
 
@@ -27,6 +28,110 @@ from .prompts import (
     REDUCE_SYSTEM, REDUCE_HUMAN,
     Config
 )
+
+
+# ==============================================================================
+# JSON CLEANING AND VALIDATION UTILITIES
+# ==============================================================================
+
+def extract_and_validate_json(raw_output: str) -> str:
+    """
+    Extract and validate JSON array from LLM output.
+
+    The LLM sometimes adds extra text before/after the JSON array.
+    This function:
+    1. Removes common prefixes like <|python_start|>
+    2. Extracts the JSON array using regex
+    3. Validates the JSON is parseable
+    4. Returns clean, valid JSON string
+
+    Args:
+        raw_output: Raw LLM output that may contain JSON + extra text
+
+    Returns:
+        Clean, validated JSON string
+
+    Raises:
+        ValueError: If no valid JSON array found
+    """
+    # Remove common LLM prefixes/suffixes
+    cleaned = raw_output.strip()
+
+    # Remove special tokens
+    special_tokens = [
+        "<|python_start|>",
+        "<|python_end|>",
+        "<|im_start|>",
+        "<|im_end|>",
+        "```json",
+        "```"
+    ]
+    for token in special_tokens:
+        cleaned = cleaned.replace(token, "")
+
+    cleaned = cleaned.strip()
+
+    # Find JSON array boundaries using regex
+    # Look for [ ... ] pattern, handling nested arrays and objects
+    json_match = re.search(r'\[[\s\S]*\]', cleaned, re.DOTALL)
+
+    if not json_match:
+        # No array found, raise error
+        raise ValueError(f"No JSON array found in output. First 200 chars: {cleaned[:200]}")
+
+    json_str = json_match.group(0)
+
+    # Validate JSON is parseable
+    try:
+        parsed = json.loads(json_str)
+
+        # Ensure it's a list
+        if not isinstance(parsed, list):
+            raise ValueError(f"Expected JSON array, got {type(parsed)}")
+
+        # Ensure it has content
+        if len(parsed) == 0:
+            raise ValueError("JSON array is empty")
+
+        # Re-serialize to ensure consistent formatting
+        return json.dumps(parsed, ensure_ascii=False)
+
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Invalid JSON: {e}. Content: {json_str[:200]}")
+
+
+def clean_question_batch(questions_list: List[str]) -> List[str]:
+    """
+    Clean and validate a batch of question JSON strings.
+
+    Args:
+        questions_list: List of raw LLM outputs
+
+    Returns:
+        List of clean, validated JSON strings
+    """
+    cleaned_questions = []
+    errors = []
+
+    for i, raw_output in enumerate(questions_list):
+        try:
+            cleaned = extract_and_validate_json(raw_output)
+            cleaned_questions.append(cleaned)
+        except ValueError as e:
+            errors.append(f"Item {i+1}: {str(e)}")
+            # Skip this item
+            continue
+
+    if errors:
+        print(f"Warning: {len(errors)} items failed validation:")
+        for error in errors[:5]:  # Show first 5 errors
+            print(f"  - {error}")
+        if len(errors) > 5:
+            print(f"  ... and {len(errors) - 5} more")
+
+    print(f"OK: Cleaned {len(cleaned_questions)}/{len(questions_list)} question sets")
+
+    return cleaned_questions
 
 
 def get_spark() -> SparkSession:
@@ -188,9 +293,14 @@ def map_generate_node(state: QuestionGenerationState) -> QuestionGenerationState
     """)
 
     # Collect results
-    batch_questions = [row["questions"] for row in questions_df.collect()]
+    batch_questions_raw = [row["questions"] for row in questions_df.collect()]
 
-    print(f"✓ Generated questions for {len(batch_questions)} batches")
+    print(f"OK: Generated questions for {len(batch_questions_raw)} batches")
+    print(f"Cleaning and validating JSON...")
+
+    # Clean and validate all question JSON
+    batch_questions = clean_question_batch(batch_questions_raw)
+
     print(f"{'='*80}\n")
 
     return {
@@ -290,12 +400,16 @@ def reduce_combine_node(state: QuestionGenerationState) -> QuestionGenerationSta
         """)
 
         # Collect results
-        next_level = [row["combined_questions"] for row in combined_df.collect()]
+        next_level_raw = [row["combined_questions"] for row in combined_df.collect()]
+
+        # Clean and validate JSON at each level
+        print(f"Cleaning and validating JSON...")
+        next_level = clean_question_batch(next_level_raw)
 
         reduce_levels.append(next_level)
         current_level = next_level
 
-        print(f"✓ Level {level_num} complete: {len(next_level)} question sets")
+        print(f"OK: Level {level_num} complete: {len(next_level)} question sets")
 
         level_num += 1
 
