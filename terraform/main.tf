@@ -60,7 +60,7 @@ module "databricks_vector" {
   depends_on = [module.databricks_tables]
 }
 
-# Databricks job for ingest_pipeline
+# Databricks jobs for ingest_pipeline and summarization_pipeline
 module "databricks_jobs" {
   source                  = "./modules/databricks_jobs"
   job_name                = var.job_name
@@ -77,6 +77,12 @@ module "databricks_jobs" {
   embedding_model         = var.embedding_model
   vector_search_endpoint  = var.vector_search_endpoint
   vector_index_name       = var.vector_index_name
+
+  # Summarization job variables
+  job_name_prefix                = var.job_name_prefix
+  summarization_notebook_path    = var.summarization_notebook_path
+  timeout_seconds_summarization  = var.timeout_seconds_summarization
+  llm_endpoint                   = var.llm_endpoint
 
   providers = {
     databricks = databricks

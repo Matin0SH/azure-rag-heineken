@@ -37,3 +37,38 @@ resource "databricks_job" "ingest_pipeline" {
     }
   }
 }
+
+resource "databricks_job" "summarization_pipeline" {
+  name                  = "${var.job_name_prefix}_summarization"
+  max_concurrent_runs   = 3
+  timeout_seconds       = var.timeout_seconds_summarization
+  existing_cluster_id   = var.existing_cluster_id != "" ? var.existing_cluster_id : null
+
+  dynamic "new_cluster" {
+    for_each = var.existing_cluster_id == "" ? [1] : []
+    content {
+      spark_version = var.new_cluster_spark_version
+      node_type_id  = var.new_cluster_node_type_id
+      num_workers   = var.new_cluster_num_workers
+    }
+  }
+
+  task {
+    task_key = "summarization_pipeline"
+    max_retries      = var.max_retries
+    retry_on_timeout = var.retry_on_timeout
+
+    notebook_task {
+      notebook_path = var.summarization_notebook_path
+      base_parameters = {
+        pdf_id                = ""
+        summary_type          = "technical"
+        catalog               = var.catalog_name
+        schema                = var.schema_name
+        llm_endpoint          = var.llm_endpoint
+        table_chunks          = "chunks_embedded"
+        table_summaries       = "document_summaries"
+      }
+    }
+  }
+}

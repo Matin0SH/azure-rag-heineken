@@ -222,6 +222,12 @@ resource "databricks_sql_table" "document_summaries" {
   }
 
   column {
+    name     = "total_batches"
+    type     = "INT"
+    comment  = "Total batches in MAP phase"
+  }
+
+  column {
     name     = "key_topics"
     type     = "ARRAY<STRING>"
     nullable = true

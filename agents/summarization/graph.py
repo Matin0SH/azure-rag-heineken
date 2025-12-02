@@ -1,127 +1,94 @@
 """
-LangGraph workflow for summarization agent.
+Summarization workflow graph using LangGraph.
 
-Assembles nodes into a graph with conditional edges and state management.
-Follows EXTRACTION philosophy: preserve completeness, organize information.
+Orchestrates Spark SQL nodes in a linear workflow:
+1. Regroup pages
+2. Create batches
+3. MAP extract
+4. REDUCE combine
+5. Extract topics
 """
 
+# LangGraph
 from langgraph.graph import StateGraph, END
+
+# Our modules
 from .state import SummarizationState
 from .nodes import (
-    batch_extract_node,
-    combine_node,
-    reflect_node,
+    regroup_pages_node,
+    create_batches_node,
+    map_extract_node,
+    reduce_combine_node,
     extract_topics_node
 )
+from .utils import save_stage_results
+
+
+# Wrapper functions that save results after each node
+def regroup_pages_with_save(state: SummarizationState) -> SummarizationState:
+    """Regroup pages and save results"""
+    result = regroup_pages_node(state)
+    save_stage_results("regroup_pages", result)
+    return result
+
+
+def create_batches_with_save(state: SummarizationState) -> SummarizationState:
+    """Create batches and save results"""
+    result = create_batches_node(state)
+    save_stage_results("create_batches", result)
+    return result
+
+
+def map_extract_with_save(state: SummarizationState) -> SummarizationState:
+    """MAP extract and save results"""
+    result = map_extract_node(state)
+    save_stage_results("map_extract", result)
+    return result
+
+
+def reduce_combine_with_save(state: SummarizationState) -> SummarizationState:
+    """REDUCE combine and save results"""
+    result = reduce_combine_node(state)
+    save_stage_results("reduce_combine", result)
+    return result
+
+
+def extract_topics_with_save(state: SummarizationState) -> SummarizationState:
+    """Extract topics and save results"""
+    result = extract_topics_node(state)
+    save_stage_results("extract_topics", result)
+    return result
 
 
 def create_summarization_graph():
     """
-    Create the summarization workflow graph.
-
-    Workflow:
-    1. START → batch_extract (MAP: Extract from chunks in batches)
-    2. batch_extract → combine (REDUCE: Hierarchical combination)
-    3. combine → reflect (CRITIQUE: Quality check)
-    4. reflect → combine (if needs_revision) OR → extract_topics
-    5. extract_topics → END
+    Create and compile the summarization workflow graph.
 
     Returns:
-        Compiled LangGraph workflow
+        Compiled LangGraph application
     """
-    # Initialize graph with state schema
+
+    # Step 1: Initialize graph with state schema
     workflow = StateGraph(SummarizationState)
 
-    # Add nodes
-    workflow.add_node("batch_extract", batch_extract_node)
-    workflow.add_node("combine", combine_node)
-    workflow.add_node("reflect", reflect_node)
-    workflow.add_node("extract_topics", extract_topics_node)
+    # Step 2: Add all nodes (with auto-save wrappers)
+    workflow.add_node("regroup_pages", regroup_pages_with_save)
+    workflow.add_node("create_batches", create_batches_with_save)
+    workflow.add_node("map_extract", map_extract_with_save)
+    workflow.add_node("reduce_combine", reduce_combine_with_save)
+    workflow.add_node("extract_topics", extract_topics_with_save)
 
-    # Set entry point
-    workflow.set_entry_point("batch_extract")
+    # Step 3: Set entry point (first node to run)
+    workflow.set_entry_point("regroup_pages")
 
-    # Add edges
-    workflow.add_edge("batch_extract", "combine")
-
-    # Conditional edge: reflect → revise OR continue
-    def should_revise(state: SummarizationState) -> str:
-        """Decide if revision needed based on critique."""
-        if state.get("needs_revision", False):
-            return "batch_extract"  # Re-run extraction/combination
-        else:
-            return "extract_topics"  # Proceed to topic extraction
-
-    workflow.add_edge("combine", "reflect")
-    workflow.add_conditional_edges(
-        "reflect",
-        should_revise,
-        {
-            "batch_extract": "batch_extract",  # Revision path (fresh extraction)
-            "extract_topics": "extract_topics"  # Success path
-        }
-    )
-
-    # Final edge to END
+    # Step 4: Define edges (workflow order)
+    workflow.add_edge("regroup_pages", "create_batches")
+    workflow.add_edge("create_batches", "map_extract")
+    workflow.add_edge("map_extract", "reduce_combine")
+    workflow.add_edge("reduce_combine", "extract_topics")
     workflow.add_edge("extract_topics", END)
 
-    # Compile graph
+    # Step 5: Compile and return
     graph = workflow.compile()
 
     return graph
-
-
-# ==============================================================================
-# HELPER: Run graph with input state
-# ==============================================================================
-
-def run_summarization(
-    pdf_id: str,
-    pdf_name: str,
-    chunks: list,
-    summary_type: str = "technical",
-    total_pages: int = None,
-    total_chunks: int = None
-) -> dict:
-    """
-    Run summarization workflow on document chunks.
-
-    Args:
-        pdf_id: Unique identifier for PDF
-        pdf_name: Display name of PDF
-        chunks: List of chunk dicts [{chunk_id, text, page_number}, ...]
-        summary_type: 'technical' or 'operator'
-        total_pages: Total pages in document (optional)
-        total_chunks: Total chunks in document (optional)
-
-    Returns:
-        Final state dict with results
-    """
-    # Create graph
-    graph = create_summarization_graph()
-
-    # Prepare initial state
-    initial_state = {
-        "pdf_id": pdf_id,
-        "pdf_name": pdf_name,
-        "chunks": chunks,
-        "summary_type": summary_type,
-        "total_pages": total_pages or 0,
-        "total_chunks": total_chunks or len(chunks),
-        "batch_summaries": [],
-        "context_window": [],
-        "current_batch": 0,
-        "intermediate_summaries": [],
-        "final_summary": "",
-        "critique": "",
-        "needs_revision": False,
-        "iteration": 0,
-        "key_topics": [],
-        "processing_time": 0.0,
-        "error_message": None
-    }
-
-    # Run graph
-    final_state = graph.invoke(initial_state)
-
-    return final_state

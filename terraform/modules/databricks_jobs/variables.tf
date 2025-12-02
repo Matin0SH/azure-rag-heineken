@@ -77,3 +77,27 @@ variable "vector_index_name" {
   type        = string
   default     = "chunks_embedded_index"
 }
+
+# Summarization job variables
+variable "job_name_prefix" {
+  description = "Prefix for job names"
+  type        = string
+  default     = "nextlevel_rag"
+}
+
+variable "summarization_notebook_path" {
+  description = "Workspace path to the summarization_pipeline notebook/script"
+  type        = string
+}
+
+variable "timeout_seconds_summarization" {
+  description = "Timeout for summarization job (longer than ingest)"
+  type        = number
+  default     = 3600
+}
+
+variable "llm_endpoint" {
+  description = "LLM endpoint for summarization"
+  type        = string
+  default     = "databricks-llama-4-maverick"
+}
