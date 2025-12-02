@@ -31,143 +31,97 @@ from .prompts import (
 
 
 # ==============================================================================
-# JSON CLEANING AND VALIDATION UTILITIES
+# JSON CLEANING AND VALIDATION
 # ==============================================================================
 
-def extract_and_validate_json(raw_output: str) -> str:
+def clean_llm_json_output(raw_text: str) -> str:
     """
-    Extract and validate JSON array from LLM output.
+    Clean and extract JSON array from LLM output using JSONDecoder.
 
-    The LLM sometimes adds extra text before/after the JSON array.
-    This function:
-    1. Removes common prefixes like <|python_start|>
-    2. Tries multiple strategies to extract valid JSON
-    3. Validates the JSON is parseable
-    4. Returns clean, valid JSON string
+    This uses Python's built-in json.JSONDecoder which properly handles
+    nested structures, escaped characters, and stops at valid JSON end.
 
     Args:
-        raw_output: Raw LLM output that may contain JSON + extra text
+        raw_text: Raw LLM output containing JSON array
 
     Returns:
-        Clean, validated JSON string
+        Clean JSON string (re-serialized for consistency)
 
     Raises:
         ValueError: If no valid JSON array found
     """
-    # Remove common LLM prefixes/suffixes
-    cleaned = raw_output.strip()
+    if not raw_text or not raw_text.strip():
+        raise ValueError("Empty input")
 
-    # Remove special tokens
-    special_tokens = [
-        "<|python_start|>",
-        "<|python_end|>",
-        "<|im_start|>",
-        "<|im_end|>",
-        "```json",
-        "```"
-    ]
-    for token in special_tokens:
-        cleaned = cleaned.replace(token, "")
+    # Remove common LLM tokens
+    text = raw_text.strip()
+    for token in ["<|python_start|>", "<|python_end|>", "<|im_start|>",
+                  "<|im_end|>", "```json", "```", "```python"]:
+        text = text.replace(token, "")
 
-    cleaned = cleaned.strip()
+    text = text.strip()
 
-    # Strategy 1: Try to parse the whole thing (it might already be clean JSON)
+    # Find first [ bracket
+    start_pos = text.find('[')
+    if start_pos == -1:
+        raise ValueError("No JSON array found (missing '[')")
+
+    # Use JSONDecoder to parse from that position
+    # JSONDecoder.raw_decode() stops at the end of valid JSON
+    decoder = json.JSONDecoder()
+
     try:
-        parsed = json.loads(cleaned)
-        if isinstance(parsed, list) and len(parsed) > 0:
-            return json.dumps(parsed, ensure_ascii=False)
-    except:
-        pass
+        parsed_data, end_pos = decoder.raw_decode(text, start_pos)
 
-    # Strategy 2: Find first [ and try to parse from there
-    start_idx = cleaned.find('[')
-    if start_idx >= 0:
-        # Try parsing from first [
-        try:
-            parsed = json.loads(cleaned[start_idx:])
-            if isinstance(parsed, list) and len(parsed) > 0:
-                return json.dumps(parsed, ensure_ascii=False)
-        except:
-            pass
+        # Validate it's a non-empty list
+        if not isinstance(parsed_data, list):
+            raise ValueError(f"Expected array, got {type(parsed_data).__name__}")
 
-        # Strategy 3: Use a smarter approach - find matching bracket
-        # Start from first [, find the matching ]
-        bracket_count = 0
-        in_string = False
-        escape_next = False
-        end_idx = -1
+        if len(parsed_data) == 0:
+            raise ValueError("JSON array is empty")
 
-        for i in range(start_idx, len(cleaned)):
-            char = cleaned[i]
+        # Re-serialize for consistency
+        return json.dumps(parsed_data, ensure_ascii=False)
 
-            if escape_next:
-                escape_next = False
-                continue
-
-            if char == '\\':
-                escape_next = True
-                continue
-
-            if char == '"' and not escape_next:
-                in_string = not in_string
-                continue
-
-            if not in_string:
-                if char == '[':
-                    bracket_count += 1
-                elif char == ']':
-                    bracket_count -= 1
-                    if bracket_count == 0:
-                        end_idx = i + 1
-                        break
-
-        if end_idx > start_idx:
-            json_candidate = cleaned[start_idx:end_idx]
-            try:
-                parsed = json.loads(json_candidate)
-                if isinstance(parsed, list) and len(parsed) > 0:
-                    return json.dumps(parsed, ensure_ascii=False)
-            except:
-                pass
-
-    # If we get here, nothing worked
-    raise ValueError(f"Could not extract valid JSON array. First 500 chars: {cleaned[:500]}")
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Invalid JSON at position {e.pos}: {e.msg}")
 
 
-def clean_question_batch(questions_list: List[str]) -> List[str]:
+def process_question_batch(raw_outputs: List[str], phase_name: str = "") -> List[str]:
     """
-    Clean and validate a batch of question JSON strings.
+    Process a batch of LLM outputs, cleaning each one.
 
     Args:
-        questions_list: List of raw LLM outputs
+        raw_outputs: List of raw LLM text outputs
+        phase_name: Optional name for logging (e.g., "MAP", "REDUCE L1")
 
     Returns:
-        List of clean, validated JSON strings
+        List of cleaned JSON strings (same length as input)
     """
-    cleaned_questions = []
-    errors = []
+    cleaned = []
+    clean_count = 0
+    kept_original_count = 0
 
-    for i, raw_output in enumerate(questions_list):
+    for i, raw in enumerate(raw_outputs):
         try:
-            cleaned = extract_and_validate_json(raw_output)
-            cleaned_questions.append(cleaned)
+            clean_json = clean_llm_json_output(raw)
+            cleaned.append(clean_json)
+            clean_count += 1
+
         except ValueError as e:
-            errors.append(f"Item {i+1}: {str(e)[:100]}")
-            # FALLBACK: Keep the original if cleaning fails
-            # This prevents losing all data if our cleaning is too aggressive
-            print(f"Warning: Item {i+1} cleaning failed, keeping original")
-            cleaned_questions.append(raw_output)
+            # Cleaning failed - keep original to avoid data loss
+            # The original might still be parseable by the counting logic
+            print(f"  [{phase_name}] Item {i+1}: Cleaning failed ({str(e)[:80]}), keeping original")
+            cleaned.append(raw)
+            kept_original_count += 1
 
-    if errors:
-        print(f"Warning: {len(errors)} items had cleaning issues (kept originals):")
-        for error in errors[:3]:  # Show first 3 errors
-            print(f"  - {error}")
-        if len(errors) > 3:
-            print(f"  ... and {len(errors) - 3} more")
+    # Summary
+    if kept_original_count > 0:
+        print(f"  [{phase_name}] Processed: {clean_count} cleaned, {kept_original_count} original (total: {len(cleaned)})")
+    else:
+        print(f"  [{phase_name}] Successfully cleaned all {clean_count} outputs")
 
-    print(f"OK: Processed {len(cleaned_questions)}/{len(questions_list)} question sets")
-
-    return cleaned_questions
+    return cleaned
 
 
 def get_spark() -> SparkSession:
@@ -332,10 +286,10 @@ def map_generate_node(state: QuestionGenerationState) -> QuestionGenerationState
     batch_questions_raw = [row["questions"] for row in questions_df.collect()]
 
     print(f"OK: Generated questions for {len(batch_questions_raw)} batches")
-    print(f"Cleaning and validating JSON...")
+    print(f"Cleaning and validating JSON outputs...")
 
     # Clean and validate all question JSON
-    batch_questions = clean_question_batch(batch_questions_raw)
+    batch_questions = process_question_batch(batch_questions_raw, phase_name="MAP")
 
     print(f"{'='*80}\n")
 
@@ -439,8 +393,8 @@ def reduce_combine_node(state: QuestionGenerationState) -> QuestionGenerationSta
         next_level_raw = [row["combined_questions"] for row in combined_df.collect()]
 
         # Clean and validate JSON at each level
-        print(f"Cleaning and validating JSON...")
-        next_level = clean_question_batch(next_level_raw)
+        print(f"Cleaning and validating JSON outputs...")
+        next_level = process_question_batch(next_level_raw, phase_name=f"REDUCE L{level_num}")
 
         reduce_levels.append(next_level)
         current_level = next_level
