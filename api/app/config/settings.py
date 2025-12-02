@@ -32,6 +32,7 @@ class Settings(BaseSettings):
 
     # Job Configuration
     INGEST_JOB_ID: int
+    SUMMARIZATION_JOB_ID: int
     EMBEDDING_MODEL: str = "databricks-gte-large-en"
 
     # SQL Warehouse Configuration (optional)

@@ -91,18 +91,17 @@ chunks_df = spark.sql(f"""
     ORDER BY page_number, chunk_index
 """)
 
-# Get PDF metadata
+# Get PDF metadata (pdf_id IS the pdf_name in this system)
+pdf_name = pdf_id
+
 pdf_metadata = spark.sql(f"""
     SELECT
-        pdf_name,
         COUNT(DISTINCT page_number) as total_pages,
         COUNT(*) as total_chunks
     FROM {TABLE_CHUNKS}
     WHERE pdf_id = '{pdf_id}'
-    GROUP BY pdf_name
 """).first()
 
-pdf_name = pdf_metadata["pdf_name"] if pdf_metadata else "Unknown"
 total_pages = pdf_metadata["total_pages"] if pdf_metadata else 0
 total_chunks = pdf_metadata["total_chunks"] if pdf_metadata else 0
 

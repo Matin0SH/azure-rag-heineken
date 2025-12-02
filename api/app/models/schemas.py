@@ -12,6 +12,10 @@ class ProcessingStatus(str, Enum):
     COMPLETED = "completed"
     FAILED = "failed"
 
+class SummaryType(str, Enum):
+    TECHNICAL = "technical"
+    OPERATOR = "operator"
+
 class IngestResponse(BaseModel):
     pdf_id: str = Field(..., description="Unique PDF identifier")
     pdf_name: str = Field(..., description="Original PDF filename")
@@ -46,3 +50,15 @@ class ErrorResponse(BaseModel):
     error: str
     message: str
     details: Optional[dict] = None
+
+class SummarizationRequest(BaseModel):
+    pdf_id: str = Field(..., description="PDF identifier (pdf_name)")
+    summary_type: SummaryType = Field(..., description="Type of summary to generate")
+
+class SummarizationResponse(BaseModel):
+    pdf_id: str = Field(..., description="PDF identifier")
+    pdf_name: str = Field(..., description="PDF filename")
+    summary_type: SummaryType = Field(..., description="Summary type requested")
+    job_run_id: int = Field(..., description="Databricks job run ID")
+    status: str = Field(..., description="Processing status")
+    message: str = Field(..., description="Response message")
