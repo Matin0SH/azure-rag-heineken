@@ -210,6 +210,12 @@ resource "databricks_sql_table" "document_summaries" {
   }
 
   column {
+    name     = "summary_text_full"
+    type     = "STRING"
+    comment  = "Full concatenated summary text (all chunks joined with separators)"
+  }
+
+  column {
     name     = "num_chunks"
     type     = "INT"
     comment  = "Number of summary chunks"

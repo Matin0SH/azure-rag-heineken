@@ -210,12 +210,18 @@ from pyspark.sql.types import *
 
 # Prepare summary data
 summary_id = str(uuid.uuid4())
+
+# Create both formats: array of chunks AND full concatenated text
+summary_chunks = final_state["summary_chunks"]
+summary_text_full = "\n\n" + "=" * 80 + "\n\n".join(summary_chunks)
+
 summary_data = [{
     "summary_id": summary_id,
     "pdf_id": pdf_id,
     "pdf_name": pdf_name,
     "summary_type": summary_type,
-    "summary_chunks": final_state["summary_chunks"],
+    "summary_chunks": summary_chunks,
+    "summary_text_full": summary_text_full,
     "num_chunks": final_state["num_final_chunks"],
     "total_pages": final_state["total_pages"],
     "total_chunks": final_state["total_chunks"],
@@ -233,6 +239,7 @@ schema = StructType([
     StructField("pdf_name", StringType(), False),
     StructField("summary_type", StringType(), False),
     StructField("summary_chunks", ArrayType(StringType()), False),
+    StructField("summary_text_full", StringType(), False),
     StructField("num_chunks", IntegerType(), False),
     StructField("total_pages", IntegerType(), False),
     StructField("total_chunks", IntegerType(), False),
