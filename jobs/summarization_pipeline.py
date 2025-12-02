@@ -170,8 +170,8 @@ initial_state = {
     "total_batches": 0,
     "batch_extractions": [],
     "reduce_levels": [],
-    "final_summary": "",
-    "key_topics": [],
+    "summary_chunks": [],
+    "num_final_chunks": 0,
     "processing_time": 0.0,
     "error_message": None
 }
@@ -215,11 +215,12 @@ summary_data = [{
     "pdf_id": pdf_id,
     "pdf_name": pdf_name,
     "summary_type": summary_type,
-    "summary_text": final_state["final_summary"],
+    "summary_chunks": final_state["summary_chunks"],
+    "num_chunks": final_state["num_final_chunks"],
     "total_pages": final_state["total_pages"],
     "total_chunks": final_state["total_chunks"],
     "total_batches": final_state["total_batches"],
-    "key_topics": final_state["key_topics"],
+    "reduce_levels": len(final_state["reduce_levels"]),
     "processing_model": LLM_ENDPOINT,
     "processing_time_seconds": processing_time,
     "created_at": datetime.now()
@@ -231,11 +232,12 @@ schema = StructType([
     StructField("pdf_id", StringType(), False),
     StructField("pdf_name", StringType(), False),
     StructField("summary_type", StringType(), False),
-    StructField("summary_text", StringType(), False),
+    StructField("summary_chunks", ArrayType(StringType()), False),
+    StructField("num_chunks", IntegerType(), False),
     StructField("total_pages", IntegerType(), False),
     StructField("total_chunks", IntegerType(), False),
     StructField("total_batches", IntegerType(), False),
-    StructField("key_topics", ArrayType(StringType()), True),
+    StructField("reduce_levels", IntegerType(), False),
     StructField("processing_model", StringType(), False),
     StructField("processing_time_seconds", FloatType(), True),
     StructField("created_at", TimestampType(), False)
@@ -270,8 +272,9 @@ print(f"PDF: {pdf_name}")
 print(f"Type: {summary_type}")
 print(f"Pages: {final_state['total_pages']}")
 print(f"Batches: {final_state['total_batches']}")
-print(f"Summary Length: {len(final_state['final_summary'])} chars")
-print(f"Topics: {', '.join(final_state['key_topics'][:5])}")
+print(f"Reduce Levels: {len(final_state['reduce_levels'])}")
+print(f"Final Chunks: {final_state['num_final_chunks']}")
+print(f"Total Summary Length: {sum(len(c) for c in final_state['summary_chunks'])} chars")
 print(f"Processing Time: {processing_time:.2f}s")
 print("=" * 80)
 
@@ -281,7 +284,7 @@ dbutils.notebook.exit(json.dumps({
     "summary_id": summary_id,
     "pdf_id": pdf_id,
     "summary_type": summary_type,
-    "summary_length": len(final_state["final_summary"]),
-    "topics_count": len(final_state["key_topics"]),
+    "num_chunks": final_state["num_final_chunks"],
+    "reduce_levels": len(final_state["reduce_levels"]),
     "processing_time": processing_time
 }))

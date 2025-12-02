@@ -363,18 +363,19 @@ def map_extract_node(state: SummarizationState) -> SummarizationState:
 def reduce_combine_node(state: SummarizationState) -> SummarizationState:
     """
     REDUCE phase: Hierarchical 3-to-1 combination using ai_query.
+    STOPS AT LEVEL 2 to preserve detailed information.
 
     Input: state["batch_extractions"] - List of extractions from MAP phase
-    Output: state["reduce_levels"], state["final_summary"]
+    Output: state["reduce_levels"], state["summary_chunks"], state["num_final_chunks"]
 
     Uses Spark SQL ai_query for hierarchical reduction.
-    Continues combining until 1 final summary remains.
+    Stops after 2 levels to keep 15-45 detailed chunks.
     """
     from pyspark.sql import SparkSession
     from pyspark.sql.functions import col, monotonically_increasing_id, floor, concat_ws, collect_list, lit
 
     print("=" * 80)
-    print("REDUCE: Hierarchical 3-to-1 combination using Spark SQL ai_query")
+    print("REDUCE: Hierarchical 3-to-1 combination (MAX 2 LEVELS)")
     print("=" * 80)
 
     batch_extractions = state.get("batch_extractions", [])
@@ -382,14 +383,15 @@ def reduce_combine_node(state: SummarizationState) -> SummarizationState:
 
     if not batch_extractions:
         print("No extractions to reduce")
-        return {**state, "reduce_levels": [], "final_summary": ""}
+        return {**state, "reduce_levels": [], "summary_chunks": [], "num_final_chunks": 0}
 
     if len(batch_extractions) == 1:
-        print("Only 1 extraction - using as final summary")
+        print("Only 1 extraction - using as final chunk")
         return {
             **state,
             "reduce_levels": [],
-            "final_summary": batch_extractions[0]
+            "summary_chunks": batch_extractions,
+            "num_final_chunks": 1
         }
 
     # Get Spark session
@@ -403,8 +405,11 @@ def reduce_combine_node(state: SummarizationState) -> SummarizationState:
     current_level = batch_extractions
     level_num = 1
 
-    # Hierarchical reduction loop
-    while len(current_level) > 1:
+    # Maximum levels to reduce (stop at level 2)
+    MAX_REDUCE_LEVELS = 2
+
+    # Hierarchical reduction loop - STOP AT LEVEL 2
+    while len(current_level) > 1 and level_num <= MAX_REDUCE_LEVELS:
         print(f"Level {level_num}: Combining {len(current_level)} items (3-to-1)")
 
         # Create DataFrame from current level
@@ -453,82 +458,16 @@ def reduce_combine_node(state: SummarizationState) -> SummarizationState:
 
         level_num += 1
 
-    # Final summary is the last item
-    final_summary = current_level[0] if current_level else ""
+    # current_level now contains 15-45 detailed summary chunks
+    num_chunks = len(current_level)
 
-    print(f"REDUCE complete: {len(batch_extractions)} extractions → 1 final summary ({level_num - 1} levels)")
+    print(f"REDUCE complete: {len(batch_extractions)} extractions → {num_chunks} final chunks ({level_num - 1} levels)")
+    print(f"✅ Stopped at level {level_num - 1} to preserve detailed information")
     print("=" * 80)
 
     return {
         **state,
         "reduce_levels": reduce_levels,
-        "final_summary": final_summary
-    }
-
-
-def extract_topics_node(state: SummarizationState) -> SummarizationState:
-    """
-    Extract key topics/keywords from final summary using ai_query.
-
-    Input: state["final_summary"]
-    Output: state["key_topics"] - List of keywords
-
-    Uses Spark SQL ai_query for topic extraction.
-    """
-    from pyspark.sql import SparkSession
-
-    print("=" * 80)
-    print("TOPICS: Extracting keywords using Spark SQL ai_query")
-    print("=" * 80)
-
-    final_summary = state.get("final_summary", "")
-
-    if not final_summary:
-        print("No final summary - skipping topic extraction")
-        return {**state, "key_topics": []}
-
-    # Get Spark session
-    spark = SparkSession.builder.getOrCreate()
-
-    # Prepare prompts
-    system_prompt = TOPIC_EXTRACTION_SYSTEM.replace("'", "''")
-    human_prompt = TOPIC_EXTRACTION_HUMAN.replace("'", "''")
-
-    # Create single-row DataFrame with summary
-    summary_df = spark.createDataFrame([{"summary": final_summary}])
-    summary_df.createOrReplaceTempView("summary_temp")
-
-    # Use ai_query to extract topics
-    topics_df = spark.sql(f"""
-        SELECT
-            ai_query(
-                '{Config.LLM_ENDPOINT}',
-                concat(
-                    '{system_prompt}',
-                    '\\n\\n',
-                    replace('{human_prompt}', '{{summary}}', summary)
-                ),
-                modelParameters => named_struct(
-                    'temperature', {Config.TOPICS_TEMPERATURE},
-                    'max_tokens', {Config.TOPICS_MAX_TOKENS}
-                )
-            ) as topics_text
-        FROM summary_temp
-    """)
-
-    # Get topics string
-    topics_text = topics_df.collect()[0]["topics_text"]
-
-    # Parse comma-separated topics
-    key_topics = [t.strip() for t in topics_text.split(",") if t.strip()]
-
-    print(f"Extracted {len(key_topics)} topics: {', '.join(key_topics[:5])}...")
-    print("=" * 80)
-
-    # Clean up temp view
-    spark.catalog.dropTempView("summary_temp")
-
-    return {
-        **state,
-        "key_topics": key_topics
+        "summary_chunks": current_level,
+        "num_final_chunks": num_chunks
     }

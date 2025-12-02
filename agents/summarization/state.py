@@ -6,7 +6,8 @@ CLEAN ARCHITECTURE:
 2. Regroup chunks by pages
 3. Create batches (5 pages per batch)
 4. MAP: Extract summaries from each batch (max 3 workers in parallel)
-5. REDUCE: Combine batches hierarchically (3-to-1) until 1 final summary
+5. REDUCE: Combine batches hierarchically (3-to-1) for 2 levels only
+6. Result: Array of 15-45 detailed summary chunks
 """
 
 from typing import TypedDict, List, Dict, Optional
@@ -21,7 +22,8 @@ class SummarizationState(TypedDict):
     2. Regroup chunks by pages
     3. Create batches (5 pages per batch)
     4. MAP: Extract summary from each batch (max 3 workers in parallel)
-    5. REDUCE: Combine batches hierarchically (3-to-1) until 1 final result
+    5. REDUCE: Combine batches hierarchically (3-to-1) for 2 levels
+    6. Output: Array of 15-45 detailed summary chunks (not 1 final summary)
     """
 
     # Input
@@ -44,12 +46,10 @@ class SummarizationState(TypedDict):
     # MAP phase results
     batch_extractions: List[str]    # One extraction per batch
 
-    # REDUCE phase results (hierarchical)
+    # REDUCE phase results (hierarchical - stops at level 2)
     reduce_levels: List[List[str]]  # Each level has fewer items than previous
-    final_summary: str              # The final combined result
-
-    # Output
-    key_topics: List[str]           # Extracted keywords from final summary
+    summary_chunks: List[str]       # Final array of 15-45 detailed chunks
+    num_final_chunks: int           # Number of chunks in final output
 
     # Metadata
     processing_time: float

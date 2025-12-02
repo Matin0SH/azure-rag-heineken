@@ -204,9 +204,15 @@ resource "databricks_sql_table" "document_summaries" {
   }
 
   column {
-    name     = "summary_text"
-    type     = "STRING"
-    comment  = "The full summary text"
+    name     = "summary_chunks"
+    type     = "ARRAY<STRING>"
+    comment  = "Array of 15-45 detailed summary chunks (hierarchical MAP-REDUCE level 2)"
+  }
+
+  column {
+    name     = "num_chunks"
+    type     = "INT"
+    comment  = "Number of summary chunks"
   }
 
   column {
@@ -228,10 +234,9 @@ resource "databricks_sql_table" "document_summaries" {
   }
 
   column {
-    name     = "key_topics"
-    type     = "ARRAY<STRING>"
-    nullable = true
-    comment  = "Extracted key topics from summary"
+    name     = "reduce_levels"
+    type     = "INT"
+    comment  = "Number of reduction levels (always 2)"
   }
 
   column {

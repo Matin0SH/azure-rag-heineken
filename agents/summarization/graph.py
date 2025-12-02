@@ -5,8 +5,7 @@ Orchestrates Spark SQL nodes in a linear workflow:
 1. Regroup pages
 2. Create batches
 3. MAP extract
-4. REDUCE combine
-5. Extract topics
+4. REDUCE combine (stops at level 2 for 15-45 detailed chunks)
 """
 
 # LangGraph
@@ -18,8 +17,7 @@ from .nodes import (
     regroup_pages_node,
     create_batches_node,
     map_extract_node,
-    reduce_combine_node,
-    extract_topics_node
+    reduce_combine_node
 )
 from .utils import save_stage_results
 
@@ -53,13 +51,6 @@ def reduce_combine_with_save(state: SummarizationState) -> SummarizationState:
     return result
 
 
-def extract_topics_with_save(state: SummarizationState) -> SummarizationState:
-    """Extract topics and save results"""
-    result = extract_topics_node(state)
-    save_stage_results("extract_topics", result)
-    return result
-
-
 def create_summarization_graph():
     """
     Create and compile the summarization workflow graph.
@@ -76,7 +67,6 @@ def create_summarization_graph():
     workflow.add_node("create_batches", create_batches_with_save)
     workflow.add_node("map_extract", map_extract_with_save)
     workflow.add_node("reduce_combine", reduce_combine_with_save)
-    workflow.add_node("extract_topics", extract_topics_with_save)
 
     # Step 3: Set entry point (first node to run)
     workflow.set_entry_point("regroup_pages")
@@ -85,8 +75,7 @@ def create_summarization_graph():
     workflow.add_edge("regroup_pages", "create_batches")
     workflow.add_edge("create_batches", "map_extract")
     workflow.add_edge("map_extract", "reduce_combine")
-    workflow.add_edge("reduce_combine", "extract_topics")
-    workflow.add_edge("extract_topics", END)
+    workflow.add_edge("reduce_combine", END)  # End after reduce (no topics)
 
     # Step 5: Compile and return
     graph = workflow.compile()
