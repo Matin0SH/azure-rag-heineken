@@ -101,3 +101,15 @@ variable "llm_endpoint" {
   type        = string
   default     = "databricks-llama-4-maverick"
 }
+
+# Question generation job variables
+variable "question_generation_notebook_path" {
+  description = "Workspace path to the question_generation_pipeline notebook/script"
+  type        = string
+}
+
+variable "timeout_seconds_question_generation" {
+  description = "Timeout for question generation job"
+  type        = number
+  default     = 3600
+}

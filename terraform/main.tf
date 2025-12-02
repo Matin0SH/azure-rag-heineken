@@ -84,6 +84,10 @@ module "databricks_jobs" {
   timeout_seconds_summarization  = var.timeout_seconds_summarization
   llm_endpoint                   = var.llm_endpoint
 
+  # Question generation job variables
+  question_generation_notebook_path      = var.question_generation_notebook_path
+  timeout_seconds_question_generation    = var.timeout_seconds_question_generation
+
   providers = {
     databricks = databricks
   }
