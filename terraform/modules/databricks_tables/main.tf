@@ -268,7 +268,7 @@ resource "databricks_sql_table" "document_summaries" {
 # ===========================
 # TABLE 5: operator_questions
 # ===========================
-# Multiple choice questions for operator training (60-80 per PDF)
+# Multiple choice questions for operator training (MAP-REDUCE chunked format)
 resource "databricks_sql_table" "operator_questions" {
   catalog_name = var.catalog_name
   schema_name  = var.schema_name
@@ -277,12 +277,12 @@ resource "databricks_sql_table" "operator_questions" {
   data_source_format = "DELTA"
   storage_location   = ""
 
-  comment = "Multiple choice questions for operator training"
+  comment = "Multiple choice questions for operator training (chunked format)"
 
   column {
-    name     = "question_id"
+    name     = "questions_id"
     type     = "STRING"
-    comment  = "Unique identifier for question"
+    comment  = "Unique identifier for this question set"
   }
 
   column {
@@ -298,82 +298,69 @@ resource "databricks_sql_table" "operator_questions" {
   }
 
   column {
-    name     = "question_number"
-    type     = "INT"
-    comment  = "Question number (1-70) for ordering"
-  }
-
-  column {
-    name     = "question_text"
-    type     = "STRING"
-    comment  = "The question text"
-  }
-
-  column {
-    name     = "option_a"
-    type     = "STRING"
-    comment  = "Choice A text"
-  }
-
-  column {
-    name     = "option_b"
-    type     = "STRING"
-    comment  = "Choice B text"
-  }
-
-  column {
-    name     = "option_c"
-    type     = "STRING"
-    comment  = "Choice C text"
-  }
-
-  column {
-    name     = "option_d"
-    type     = "STRING"
-    comment  = "Choice D text"
-  }
-
-  column {
-    name     = "correct_answer"
-    type     = "STRING"
-    comment  = "Correct answer: A, B, C, or D"
-  }
-
-  column {
-    name     = "explanation"
-    type     = "STRING"
-    comment  = "Explanation/reason for the correct answer"
-  }
-
-  column {
-    name     = "difficulty_level"
-    type     = "STRING"
-    comment  = "Difficulty: easy, medium, hard"
-  }
-
-  column {
-    name     = "topic_category"
-    type     = "STRING"
-    comment  = "Category: safety, operation, maintenance, troubleshooting, etc."
-  }
-
-  column {
-    name     = "page_references"
-    type     = "ARRAY<INT>"
-    nullable = true
-    comment  = "Page numbers this question relates to"
-  }
-
-  column {
-    name     = "chunk_references"
+    name     = "question_chunks"
     type     = "ARRAY<STRING>"
+    comment  = "Array of 15-45 question chunks (JSON strings with multiple questions each)"
+  }
+
+  column {
+    name     = "questions_full_text"
+    type     = "STRING"
+    comment  = "Full concatenated question text (all chunks joined with separators)"
+  }
+
+  column {
+    name     = "num_question_chunks"
+    type     = "INT"
+    comment  = "Number of question chunks"
+  }
+
+  column {
+    name     = "total_questions"
+    type     = "INT"
+    comment  = "Total count of all questions across chunks"
+  }
+
+  column {
+    name     = "total_pages"
+    type     = "INT"
+    comment  = "Total pages in PDF"
+  }
+
+  column {
+    name     = "total_chunks"
+    type     = "INT"
+    comment  = "Total chunks processed"
+  }
+
+  column {
+    name     = "total_batches"
+    type     = "INT"
+    comment  = "Total batches in MAP phase"
+  }
+
+  column {
+    name     = "reduce_levels"
+    type     = "INT"
+    comment  = "Number of reduction levels (always 2)"
+  }
+
+  column {
+    name     = "processing_model"
+    type     = "STRING"
+    comment  = "LLM model used for question generation"
+  }
+
+  column {
+    name     = "processing_time_seconds"
+    type     = "FLOAT"
     nullable = true
-    comment  = "Chunk IDs used to generate this question"
+    comment  = "Time taken to generate questions"
   }
 
   column {
     name     = "created_at"
     type     = "TIMESTAMP"
-    comment  = "When question was created"
+    comment  = "When questions were created"
   }
 }

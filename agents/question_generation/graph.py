@@ -1,15 +1,22 @@
 """
-LangGraph workflow for question generation agent.
+LangGraph workflow for question generation - MAP-REDUCE pattern.
 
-Assembles nodes into a graph with conditional edges and state management.
+WORKFLOW (Same as Summarization):
+1. regroup_pages: Combine chunks into pages
+2. create_batches: Group pages into batches (5 pages per batch)
+3. map_generate: Generate 5-7 questions per batch using ai_query (parallel)
+4. reduce_combine: Hierarchical 3-to-1 for 2 levels (deduplicate + polish)
+
+Output: Array of 15-45 question chunks
 """
 
 from langgraph.graph import StateGraph, END
 from .state import QuestionGenerationState
 from .nodes import (
-    generate_questions_node,
-    reflect_node,
-    finalize_questions_node
+    regroup_pages_node,
+    create_batches_node,
+    map_generate_node,
+    reduce_combine_node
 )
 
 
@@ -18,10 +25,7 @@ def create_question_generation_graph():
     Create the question generation workflow graph.
 
     Workflow:
-    1. START → generate_questions (Generate training questions)
-    2. generate_questions → reflect (CRITIQUE: Quality check)
-    3. reflect → generate_questions (if needs_revision) OR → finalize_questions
-    4. finalize_questions → END
+    START → regroup_pages → create_batches → map_generate → reduce_combine → END
 
     Returns:
         Compiled LangGraph workflow
@@ -30,83 +34,21 @@ def create_question_generation_graph():
     workflow = StateGraph(QuestionGenerationState)
 
     # Add nodes
-    workflow.add_node("generate_questions", generate_questions_node)
-    workflow.add_node("reflect", reflect_node)
-    workflow.add_node("finalize_questions", finalize_questions_node)
+    workflow.add_node("regroup_pages", regroup_pages_node)
+    workflow.add_node("create_batches", create_batches_node)
+    workflow.add_node("map_generate", map_generate_node)
+    workflow.add_node("reduce_combine", reduce_combine_node)
 
     # Set entry point
-    workflow.set_entry_point("generate_questions")
+    workflow.set_entry_point("regroup_pages")
 
-    # Add edges
-    workflow.add_edge("generate_questions", "reflect")
-
-    # Conditional edge: reflect → revise OR finalize
-    def should_revise(state: QuestionGenerationState) -> str:
-        """Decide if revision needed based on critique."""
-        if state.get("needs_revision", False):
-            return "generate_questions"  # Re-run generation
-        else:
-            return "finalize_questions"  # Proceed to finalization
-
-    workflow.add_conditional_edges(
-        "reflect",
-        should_revise,
-        {
-            "generate_questions": "generate_questions",  # Revision path
-            "finalize_questions": "finalize_questions"  # Success path
-        }
-    )
-
-    # Final edge to END
-    workflow.add_edge("finalize_questions", END)
+    # Linear edges
+    workflow.add_edge("regroup_pages", "create_batches")
+    workflow.add_edge("create_batches", "map_generate")
+    workflow.add_edge("map_generate", "reduce_combine")
+    workflow.add_edge("reduce_combine", END)
 
     # Compile graph
     graph = workflow.compile()
 
     return graph
-
-
-# ==============================================================================
-# HELPER: Run graph with input state
-# ==============================================================================
-
-def run_question_generation(
-    pdf_id: str,
-    pdf_name: str,
-    operator_summary: str,
-    num_questions: int = 10
-) -> dict:
-    """
-    Run question generation workflow on operator summary.
-
-    Args:
-        pdf_id: Unique identifier for PDF
-        pdf_name: Display name of PDF
-        operator_summary: The operator summary to generate questions from
-        num_questions: Target number of questions (default: 10)
-
-    Returns:
-        Final state dict with results
-    """
-    # Create graph
-    graph = create_question_generation_graph()
-
-    # Prepare initial state
-    initial_state = {
-        "pdf_id": pdf_id,
-        "pdf_name": pdf_name,
-        "operator_summary": operator_summary,
-        "num_questions": num_questions,
-        "generated_questions": [],
-        "critique": "",
-        "needs_revision": False,
-        "iteration": 0,
-        "final_questions": [],
-        "processing_time": 0.0,
-        "error_message": None
-    }
-
-    # Run graph
-    final_state = graph.invoke(initial_state)
-
-    return final_state
