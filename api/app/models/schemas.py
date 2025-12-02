@@ -62,3 +62,13 @@ class SummarizationResponse(BaseModel):
     job_run_id: int = Field(..., description="Databricks job run ID")
     status: str = Field(..., description="Processing status")
     message: str = Field(..., description="Response message")
+
+class QuestionGenerationRequest(BaseModel):
+    pdf_id: str = Field(..., description="PDF identifier (pdf_name)")
+
+class QuestionGenerationResponse(BaseModel):
+    pdf_id: str = Field(..., description="PDF identifier")
+    pdf_name: str = Field(..., description="PDF filename")
+    job_run_id: int = Field(..., description="Databricks job run ID")
+    status: str = Field(..., description="Processing status")
+    message: str = Field(..., description="Response message")

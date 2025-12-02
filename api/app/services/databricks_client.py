@@ -90,6 +90,30 @@ class DatabricksClient:
 
         return response.json()
 
+    def trigger_question_generation_job(self, pdf_id: str) -> Dict[str, Any]:
+        """
+        Trigger Databricks job for question generation
+
+        Args:
+            pdf_id: PDF identifier
+
+        Returns:
+            Job run information including run_id
+        """
+        url = f"{self.host}/api/2.1/jobs/run-now"
+
+        payload = {
+            "job_id": settings.QUESTION_GENERATION_JOB_ID,
+            "notebook_params": {
+                "pdf_id": pdf_id
+            }
+        }
+
+        response = requests.post(url, json=payload, headers=self.headers)
+        response.raise_for_status()
+
+        return response.json()
+
     def get_job_run_status(self, run_id: int) -> Dict[str, Any]:
         """
         Get job run status

@@ -6,12 +6,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import time
 
-from app.routers import ingest, status, summarization
+from app.routers import ingest, status, summarization, question_generation
 from app.config.settings import settings
 
 app = FastAPI(
     title="NextLevel RAG API",
-    description="REST API for PDF ingestion, processing, and summarization",
+    description="REST API for PDF ingestion, processing, summarization, and question generation",
     version="1.0.0",
     docs_url="/api/docs",
     redoc_url="/api/redoc"
@@ -39,6 +39,7 @@ async def add_process_time_header(request: Request, call_next):
 app.include_router(ingest.router, prefix="/api/v1", tags=["Ingestion"])
 app.include_router(status.router, prefix="/api/v1", tags=["Status"])
 app.include_router(summarization.router, prefix="/api/v1", tags=["Summarization"])
+app.include_router(question_generation.router, prefix="/api/v1", tags=["Question Generation"])
 
 # Health check
 @app.get("/health")
