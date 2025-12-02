@@ -153,9 +153,14 @@ def regroup_pages_node(state: SummarizationState) -> SummarizationState:
 
     Uses Spark for memory efficiency and parallel processing.
     """
+    print("\n" + "=" * 80)
+    print("🔄 NODE: regroup_pages_node - START")
+    print("=" * 80)
+
     from pyspark.sql import SparkSession
     from pyspark.sql.functions import col, collect_list, concat_ws
 
+    print("📊 Importing Spark dependencies... OK")
     print("=" * 80)
     print("REGROUP: Combining chunks by page using Spark")
     print("=" * 80)

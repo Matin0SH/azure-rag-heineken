@@ -14,6 +14,17 @@
 # COMMAND ----------
 
 # MAGIC %md
+# MAGIC ## Install Dependencies
+
+# COMMAND ----------
+
+# Install required packages
+%pip install langgraph langgraph-checkpoint-sqlite langchain langchain-core databricks-langchain --quiet
+dbutils.library.restartPython()
+
+# COMMAND ----------
+
+# MAGIC %md
 # MAGIC ## Configuration
 
 # COMMAND ----------
@@ -133,12 +144,18 @@ log_checkpoint("Step 2: LangGraph Workflow", "start", "Initializing graph")
 
 # Import LangGraph workflow
 import sys
-sys.path.append("/Workspace/Repos/matin_kh84/NextLevel")  # Adjust path to your repo
+repo_path = "/Workspace/Repos/Production/azure-rag-heineken"
+sys.path.append(repo_path)
+print(f"Added to sys.path: {repo_path}")
 
+print("Importing agents.summarization...")
 from agents.summarization import create_summarization_graph
+print("✓ Import successful")
 
 # Create graph
+print("Creating summarization graph...")
 graph = create_summarization_graph()
+print("✓ Graph created")
 
 # Prepare initial state
 initial_state = {
