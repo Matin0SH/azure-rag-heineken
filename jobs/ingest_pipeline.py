@@ -464,10 +464,10 @@ try:
 
     from pyspark.sql.functions import col
 
-    # Cast embedding to array<float>
+    # Cast embedding to array<double>
     embedded_df_fixed = embedded_df.withColumn(
         "embedding",
-        col("embedding").cast("array<float>")
+        col("embedding").cast("array<double>")
     )
 
     # Delete existing chunks for this PDF
