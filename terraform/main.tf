@@ -8,7 +8,7 @@ terraform {
   }
   backend "azurerm" {
     resource_group_name  = "rg-databricks-rag-dev"
-    storage_account_name = "stdatabricksragstate"
+    storage_account_name = "stdatabricksragnew24"
     container_name       = "tfstate"
     key                  = "nextlevel/terraform.tfstate"
   }
@@ -17,6 +17,13 @@ terraform {
 provider "databricks" {
   host  = var.databricks_host
   token = var.databricks_token
+}
+
+# Auto-connect GitHub repository to Databricks
+resource "databricks_repo" "main" {
+  url    = var.github_repo_url
+  path   = "/Repos/Production/azure-rag-heineken"
+  branch = "main"
 }
 
 # Base catalog/schema and volumes
@@ -31,18 +38,18 @@ module "databricks_foundation" {
   }
 }
 
-# Core tables
-module "databricks_tables" {
-  source       = "./modules/databricks_tables"
-  catalog_name = var.catalog_name
-  schema_name  = var.schema_name
-
-  providers = {
-    databricks = databricks
-  }
-
-  depends_on = [module.databricks_foundation]
-}
+# Core tables - COMMENTED OUT (manually created via SQL)
+# module "databricks_tables" {
+#   source       = "./modules/databricks_tables"
+#   catalog_name = var.catalog_name
+#   schema_name  = var.schema_name
+#
+#   providers = {
+#     databricks = databricks
+#   }
+#
+#   depends_on = [module.databricks_foundation]
+# }
 
 # Vector index on chunks table
 module "databricks_vector" {
@@ -57,7 +64,7 @@ module "databricks_vector" {
     databricks = databricks
   }
 
-  depends_on = [module.databricks_tables]
+  depends_on = [module.databricks_foundation]
 }
 
 # Databricks jobs for ingest_pipeline and summarization_pipeline
@@ -92,5 +99,5 @@ module "databricks_jobs" {
     databricks = databricks
   }
 
-  depends_on = [module.databricks_tables]
+  depends_on = [module.databricks_foundation]
 }

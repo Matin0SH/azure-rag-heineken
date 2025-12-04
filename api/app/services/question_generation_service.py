@@ -179,6 +179,61 @@ class QuestionGenerationService:
             "message": message
         }
 
+    @staticmethod
+    def list_questions() -> Dict[str, Any]:
+        """
+        List all generated questions from Databricks
+
+        Returns:
+            List of question sets
+        """
+        from databricks.sdk import WorkspaceClient
+        from databricks.sdk.service.sql import StatementState
+
+        try:
+            w = WorkspaceClient(
+                host=settings.DATABRICKS_HOST,
+                token=settings.DATABRICKS_TOKEN
+            )
+
+            query = f"""
+            SELECT
+                questions_id,
+                pdf_id,
+                pdf_name,
+                created_at
+            FROM {settings.CATALOG_NAME}.`{settings.SCHEMA_NAME}`.operator_questions
+            ORDER BY created_at DESC
+            """
+
+            statement = w.statement_execution.execute_statement(
+                warehouse_id=settings.SQL_WAREHOUSE_ID,
+                statement=query,
+                wait_timeout="30s"
+            )
+
+            questions = []
+            if statement.status.state == StatementState.SUCCEEDED:
+                if statement.result and statement.result.data_array:
+                    for row in statement.result.data_array:
+                        questions.append({
+                            "questions_id": row[0],
+                            "pdf_id": row[1],
+                            "pdf_name": row[2],
+                            "created_at": row[3]
+                        })
+
+            return {
+                "questions": questions,
+                "total": len(questions)
+            }
+
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to list questions: {str(e)}"
+            )
+
 
 # Singleton instance
 question_generation_service = QuestionGenerationService()

@@ -32,7 +32,7 @@ dbutils.library.restartPython()
 dbutils.widgets.text("pdf_id", "", "PDF ID")
 
 # Configuration widgets (set by Terraform)
-dbutils.widgets.text("catalog", "heineken_test_workspace", "Catalog")
+dbutils.widgets.text("catalog", "databricks_rag_dev", "Catalog")
 dbutils.widgets.text("schema", "nextlevel-rag", "Schema")
 dbutils.widgets.text("llm_endpoint", "databricks-llama-4-maverick", "LLM Endpoint")
 dbutils.widgets.text("table_chunks", "chunks_embedded", "Table: Chunks")

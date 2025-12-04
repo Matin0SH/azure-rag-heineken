@@ -191,6 +191,63 @@ class PDFService:
                 detail=f"Failed to get job status: {str(e)}"
             )
 
+    @staticmethod
+    def list_pdfs() -> Dict[str, Any]:
+        """
+        List all PDFs from registry table
+
+        Returns:
+            List of PDFs with their status
+        """
+        from databricks.sdk import WorkspaceClient
+        from databricks.sdk.service.sql import StatementState
+
+        try:
+            w = WorkspaceClient(
+                host=settings.DATABRICKS_HOST,
+                token=settings.DATABRICKS_TOKEN
+            )
+
+            query = f"""
+            SELECT
+                pdf_id,
+                pdf_name,
+                processing_status,
+                upload_date,
+                processed_date
+            FROM {settings.CATALOG_NAME}.`{settings.SCHEMA_NAME}`.{settings.TABLE_REGISTRY}
+            ORDER BY upload_date DESC
+            """
+
+            statement = w.statement_execution.execute_statement(
+                warehouse_id=settings.SQL_WAREHOUSE_ID,
+                statement=query,
+                wait_timeout="30s"
+            )
+
+            pdfs = []
+            if statement.status.state == StatementState.SUCCEEDED:
+                if statement.result and statement.result.data_array:
+                    for row in statement.result.data_array:
+                        pdfs.append({
+                            "pdf_id": row[0],
+                            "pdf_name": row[1],
+                            "processing_status": row[2],
+                            "upload_date": row[3],
+                            "processed_date": row[4]
+                        })
+
+            return {
+                "pdfs": pdfs,
+                "total": len(pdfs)
+            }
+
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to list PDFs: {str(e)}"
+            )
+
 
 # Singleton instance
 pdf_service = PDFService()

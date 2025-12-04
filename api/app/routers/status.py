@@ -3,8 +3,10 @@ Status Router - Check PDF and Job processing status
 """
 from fastapi import APIRouter, Depends, HTTPException, Path
 
-from app.models.schemas import StatusResponse, JobStatusResponse, ErrorResponse
+from app.models.schemas import StatusResponse, JobStatusResponse, ErrorResponse, PDFListResponse, SummaryListResponse, QuestionListResponse
 from app.services.pdf_service import pdf_service
+from app.services.summarization_service import summarization_service
+from app.services.question_generation_service import question_generation_service
 from app.utils.auth import validate_api_key
 
 router = APIRouter()
@@ -101,3 +103,72 @@ async def get_job_status(
     }
 
     return JobStatusResponse(**job_data)
+
+
+@router.get(
+    "/pdfs",
+    response_model=PDFListResponse,
+    responses={
+        401: {"model": ErrorResponse, "description": "Unauthorized"},
+        500: {"model": ErrorResponse, "description": "Internal server error"}
+    },
+    summary="List all PDFs",
+    description="Get list of all PDFs from Databricks registry"
+)
+async def list_pdfs(
+    _: bool = Depends(validate_api_key)
+):
+    """
+    List all PDFs from the registry table.
+
+    Returns:
+        PDFListResponse with list of all PDFs and their status
+    """
+    result = pdf_service.list_pdfs()
+    return PDFListResponse(**result)
+
+
+@router.get(
+    "/summaries",
+    response_model=SummaryListResponse,
+    responses={
+        401: {"model": ErrorResponse, "description": "Unauthorized"},
+        500: {"model": ErrorResponse, "description": "Internal server error"}
+    },
+    summary="List all summaries",
+    description="Get list of all summaries from Databricks"
+)
+async def list_summaries(
+    _: bool = Depends(validate_api_key)
+):
+    """
+    List all summaries from the document_summaries table.
+
+    Returns:
+        SummaryListResponse with list of all summaries
+    """
+    result = summarization_service.list_summaries()
+    return SummaryListResponse(**result)
+
+
+@router.get(
+    "/questions",
+    response_model=QuestionListResponse,
+    responses={
+        401: {"model": ErrorResponse, "description": "Unauthorized"},
+        500: {"model": ErrorResponse, "description": "Internal server error"}
+    },
+    summary="List all question sets",
+    description="Get list of all generated question sets from Databricks"
+)
+async def list_questions(
+    _: bool = Depends(validate_api_key)
+):
+    """
+    List all question sets from the operator_questions table.
+
+    Returns:
+        QuestionListResponse with list of all question sets
+    """
+    result = question_generation_service.list_questions()
+    return QuestionListResponse(**result)

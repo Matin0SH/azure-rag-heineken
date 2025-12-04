@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     DATABRICKS_TOKEN: str
 
     # Unity Catalog Configuration
-    CATALOG_NAME: str = "heineken_test_workspace"
+    CATALOG_NAME: str = "databricks_rag_dev"
     SCHEMA_NAME: str = "nextlevel-rag"
 
     # Volume Configuration
@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     # Vector Search Configuration
     VECTOR_SEARCH_ENDPOINT: str = "heineken-vdb"
     VECTOR_INDEX_NAME: str = "chunks_embedded_index"
+
+    # LLM Configuration
+    LLM_ENDPOINT: str = "databricks-llama-4-maverick"
 
     # Job Configuration
     INGEST_JOB_ID: int

@@ -3,10 +3,74 @@ variable "databricks_host" {
   type        = string
 }
 
+variable "databricks_workspace_url" {
+  description = "Databricks workspace URL (alternative name)"
+  type        = string
+}
+
+variable "databricks_workspace_id" {
+  description = "Databricks workspace ID"
+  type        = string
+}
+
 variable "databricks_token" {
   description = "Databricks personal access token"
   type        = string
   sensitive   = true
+}
+
+variable "github_repo_url" {
+  description = "GitHub repository URL"
+  type        = string
+}
+
+variable "azure_subscription_id" {
+  description = "Azure subscription ID"
+  type        = string
+  sensitive   = true
+}
+
+variable "azure_region" {
+  description = "Azure region"
+  type        = string
+  default     = "eastus"
+}
+
+variable "project_name" {
+  description = "Project name"
+  type        = string
+  default     = "databricks-rag"
+}
+
+variable "resource_group_name" {
+  description = "Resource group name"
+  type        = string
+}
+
+variable "storage_account_name" {
+  description = "Storage account name"
+  type        = string
+}
+
+variable "key_vault_name" {
+  description = "Key vault name"
+  type        = string
+}
+
+variable "container_registry_name" {
+  description = "Container registry name"
+  type        = string
+}
+
+variable "app_service_name" {
+  description = "App service name"
+  type        = string
+}
+
+variable "app_service_tier" {
+  description = "App service tier"
+  type        = string
+  default     = "B1"
 }
 
 variable "catalog_name" {

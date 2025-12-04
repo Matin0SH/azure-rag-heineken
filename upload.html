@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload PDF - NextLevel RAG</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .upload-section {
+            padding: 20px;
+            background: #f9f9f9;
+            border-radius: 4px;
+            margin-bottom: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+
+        input[type="file"] {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 100%;
+            max-width: 400px;
+        }
+
+        button {
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .result {
+            padding: 15px;
+            margin-top: 15px;
+            border-radius: 4px;
+            display: none;
+        }
+
+        .result.success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+
+        .result.error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        th {
+            background: #f8f9fa;
+            font-weight: 600;
+        }
+
+        .status {
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .status.completed {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status.processing {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status.pending {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .status.failed {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Upload PDF Document</h1>
+
+        <!-- Upload Section -->
+        <div class="upload-section">
+            <h2>Upload New PDF</h2>
+            <form id="uploadForm">
+                <div class="form-group">
+                    <label for="fileInput">Select PDF File (Max 500MB):</label>
+                    <input type="file" id="fileInput" accept=".pdf" required>
+                </div>
+                <button type="submit" id="uploadBtn">Upload PDF</button>
+            </form>
+
+            <div id="result" class="result"></div>
+        </div>
+
+        <!-- Existing PDFs Table -->
+        <div>
+            <h2>Existing PDFs</h2>
+            <div id="loading" class="loading">Loading PDFs...</div>
+            <table id="pdfsTable" style="display: none;">
+                <thead>
+                    <tr>
+                        <th>PDF Name</th>
+                        <th>Upload Date</th>
+                        <th>Status</th>
+                        <th>Processed Date</th>
+                    </tr>
+                </thead>
+                <tbody id="pdfsBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000/api/v1';
+        const API_KEY = 'my-secure-test-key-123';
+
+        // Load existing PDFs on page load
+        window.addEventListener('load', loadPDFs);
+
+        // Handle form submit
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await uploadPDF();
+        });
+
+        async function uploadPDF() {
+            const fileInput = document.getElementById('fileInput');
+            const uploadBtn = document.getElementById('uploadBtn');
+            const result = document.getElementById('result');
+
+            const file = fileInput.files[0];
+            if (!file) {
+                showResult('Please select a file', 'error');
+                return;
+            }
+
+            // Validate file size (500MB)
+            if (file.size > 500 * 1024 * 1024) {
+                showResult('File size must be less than 500MB', 'error');
+                return;
+            }
+
+            // Validate file type
+            if (!file.name.toLowerCase().endsWith('.pdf')) {
+                showResult('Only PDF files are allowed', 'error');
+                return;
+            }
+
+            uploadBtn.disabled = true;
+            uploadBtn.textContent = 'Uploading...';
+            result.style.display = 'none';
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch(`${API_BASE}/ingest-pdf`, {
+                    method: 'POST',
+                    headers: {
+                        'X-API-Key': API_KEY
+                    },
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showResult(`✓ Upload successful! PDF ID: ${data.pdf_id}, Job Run ID: ${data.job_run_id}`, 'success');
+                    fileInput.value = '';
+                    // Reload PDFs table
+                    setTimeout(loadPDFs, 2000);
+                } else {
+                    showResult(`✗ Upload failed: ${data.detail || data.message || 'Unknown error'}`, 'error');
+                }
+            } catch (error) {
+                showResult(`✗ Upload failed: ${error.message}`, 'error');
+            } finally {
+                uploadBtn.disabled = false;
+                uploadBtn.textContent = 'Upload PDF';
+            }
+        }
+
+        async function loadPDFs() {
+            const loading = document.getElementById('loading');
+            const table = document.getElementById('pdfsTable');
+            const tbody = document.getElementById('pdfsBody');
+
+            loading.style.display = 'block';
+            table.style.display = 'none';
+
+            try {
+                const response = await fetch(`${API_BASE}/pdfs`, {
+                    headers: {
+                        'X-API-Key': API_KEY
+                    }
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    tbody.innerHTML = '';
+
+                    if (data.pdfs.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">No PDFs found</td></tr>';
+                    } else {
+                        data.pdfs.forEach(pdf => {
+                            const row = document.createElement('tr');
+                            row.innerHTML = `
+                                <td>${pdf.pdf_name}</td>
+                                <td>${formatDate(pdf.upload_date)}</td>
+                                <td><span class="status ${pdf.processing_status}">${pdf.processing_status}</span></td>
+                                <td>${pdf.processed_date ? formatDate(pdf.processed_date) : '-'}</td>
+                            `;
+                            tbody.appendChild(row);
+                        });
+                    }
+
+                    loading.style.display = 'none';
+                    table.style.display = 'table';
+                } else {
+                    loading.textContent = `Error loading PDFs: ${data.detail || data.message}`;
+                }
+            } catch (error) {
+                loading.textContent = `Error loading PDFs: ${error.message}`;
+            }
+        }
+
+        function showResult(message, type) {
+            const result = document.getElementById('result');
+            result.textContent = message;
+            result.className = `result ${type}`;
+            result.style.display = 'block';
+        }
+
+        function formatDate(dateString) {
+            if (!dateString) return '-';
+            const date = new Date(dateString);
+            return date.toLocaleString();
+        }
+    </script>
+</body>
+</html>

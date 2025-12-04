@@ -22,7 +22,7 @@ dbutils.widgets.text("pdf_name", "", "PDF Filename")
 dbutils.widgets.text("pdf_id", "", "PDF ID")
 
 # Configuration widgets (set by Terraform)
-dbutils.widgets.text("catalog", "heineken_test_workspace", "Catalog")
+dbutils.widgets.text("catalog", "databricks_rag_dev", "Catalog")
 dbutils.widgets.text("schema", "nextlevel-rag", "Schema")
 dbutils.widgets.text("embedding_model", "databricks-gte-large-en", "Embedding Model")
 dbutils.widgets.text("volume_raw_pdfs", "raw_pdfs", "Volume: Raw PDFs")

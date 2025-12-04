@@ -186,6 +186,63 @@ class SummarizationService:
             "message": message
         }
 
+    @staticmethod
+    def list_summaries() -> Dict[str, Any]:
+        """
+        List all summaries from Databricks
+
+        Returns:
+            List of summaries
+        """
+        from databricks.sdk import WorkspaceClient
+        from databricks.sdk.service.sql import StatementState
+
+        try:
+            w = WorkspaceClient(
+                host=settings.DATABRICKS_HOST,
+                token=settings.DATABRICKS_TOKEN
+            )
+
+            query = f"""
+            SELECT
+                summary_id,
+                pdf_id,
+                pdf_name,
+                summary_type,
+                created_at
+            FROM {settings.CATALOG_NAME}.`{settings.SCHEMA_NAME}`.document_summaries
+            ORDER BY created_at DESC
+            """
+
+            statement = w.statement_execution.execute_statement(
+                warehouse_id=settings.SQL_WAREHOUSE_ID,
+                statement=query,
+                wait_timeout="30s"
+            )
+
+            summaries = []
+            if statement.status.state == StatementState.SUCCEEDED:
+                if statement.result and statement.result.data_array:
+                    for row in statement.result.data_array:
+                        summaries.append({
+                            "summary_id": row[0],
+                            "pdf_id": row[1],
+                            "pdf_name": row[2],
+                            "summary_type": row[3],
+                            "created_at": row[4]
+                        })
+
+            return {
+                "summaries": summaries,
+                "total": len(summaries)
+            }
+
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to list summaries: {str(e)}"
+            )
+
 
 # Singleton instance
 summarization_service = SummarizationService()

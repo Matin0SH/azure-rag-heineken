@@ -36,26 +36,26 @@ env:
   # ============================================================================
 
   - name: INGEST_JOB_ID
-    value: "732673104250690"
+    value: "0"
 
   - name: SUMMARIZATION_JOB_ID
-    value: "754789764730261"
+    value: "0"
 
   - name: QUESTION_GENERATION_JOB_ID
-    value: "813011324430281"
+    value: "0"
 
   # ============================================================================
   # UNITY CATALOG CONFIGURATION
   # ============================================================================
 
   - name: CATALOG_NAME
-    value: "heineken_test_workspace"
+    value: "databricks_rag_dev"
 
   - name: SCHEMA_NAME
     value: "nextlevel-rag"
 
   - name: SQL_WAREHOUSE_ID
-    value: "28150cf4611d3a27"
+    value: "6c563112651348b1"
 
   # ============================================================================
   # VOLUME CONFIGURATION
@@ -126,7 +126,7 @@ resources:
   - name: nextlevel-sql-warehouse
     permission: CAN_USE
     sql_warehouse:
-      id: "28150cf4611d3a27"
+      id: "6c563112651348b1"
 
   # Vector Search endpoint access
   - name: nextlevel-vector-search

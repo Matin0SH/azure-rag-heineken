@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import time
 
-from app.routers import ingest, status, summarization, question_generation
+from app.routers import ingest, status, summarization, question_generation, chat
 from app.config.settings import settings
 
 # Get port from environment (Databricks Apps injects DATABRICKS_APP_PORT)
@@ -26,11 +26,11 @@ app = FastAPI(
     openapi_url="/api/openapi.json"  # OAuth2 protected on Databricks Apps
 )
 
-# CORS middleware
+# CORS middleware - Allow all origins for development
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS,
-    allow_credentials=True,
+    allow_origins=["*"],  # Allow all origins including file://
+    allow_credentials=False,  # Must be False when allow_origins is ["*"]
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -49,6 +49,7 @@ app.include_router(ingest.router, prefix="/api/v1", tags=["Ingestion"])
 app.include_router(status.router, prefix="/api/v1", tags=["Status"])
 app.include_router(summarization.router, prefix="/api/v1", tags=["Summarization"])
 app.include_router(question_generation.router, prefix="/api/v1", tags=["Question Generation"])
+app.include_router(chat.router, prefix="/api/v1", tags=["Chat"])
 
 # Health check (public, no /api prefix)
 @app.get("/health")
