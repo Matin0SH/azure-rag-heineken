@@ -11,12 +11,6 @@ Complete Terraform infrastructure for deploying a Databricks-based RAG (Retrieva
 5. **Databricks Personal Access Token** generated
 6. **SQL Warehouse** created in Databricks
 
-## Current Configuration
-
-**Azure Subscription:** Azure subscription 1 (`a51ac199-5e57-484e-b4ed-194abc9fa5f8`)
-**Databricks Workspace:** https://adb-420728015502334.14.azuredatabricks.net
-**Region:** East US
-
 ## Architecture
 
 This infrastructure is split into two stages:
